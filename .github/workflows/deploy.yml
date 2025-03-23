@@ -34,10 +34,40 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Update Lambda function
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Create terraform.tfvars
+        working-directory: terraform/environments/prod
         run: |
-          aws lambda update-function-code \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --image-uri ${{ steps.build-image.outputs.image }}
+          cat > terraform.tfvars << EOF
+          aws_region          = "${{ secrets.AWS_REGION }}"
+          ecr_repository_name = "${{ secrets.ECR_REPOSITORY }}"
+          lambda_function_name = "${{ secrets.LAMBDA_FUNCTION_NAME }}"
+          scholar_inbox_email = "${{ secrets.SCHOLAR_INBOX_EMAIL }}"
+          scholar_inbox_password = "${{ secrets.SCHOLAR_INBOX_PASSWORD }}"
+          slack_api_token = "${{ secrets.SLACK_API_TOKEN }}"
+          slack_channel_id = "${{ secrets.SLACK_CHANNEL_ID }}"
+          EOF
+
+      - name: Terraform Init
+        working-directory: terraform/environments/prod
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=prod/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Plan
+        working-directory: terraform/environments/prod
+        run: terraform plan -input=false
+
+      - name: Terraform Apply
+        working-directory: terraform/environments/prod
+        run: terraform apply -auto-approve -input=false
