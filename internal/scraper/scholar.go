@@ -1,27 +1,22 @@
-package main
+package scraper
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"time"
 
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/gocolly/colly/v2"
-	"github.com/slack-go/slack"
+	"github.com/kohbanye/scholar-inbox-daily/internal/domain"
 )
 
-type Paper struct {
-	Title    string
-	Authors  string
-	Date     string
-	URL      string
-	Abstract string
+type ScholarScraper struct{}
+
+func NewScholarScraper() *ScholarScraper {
+	return &ScholarScraper{}
 }
 
-func fetchPapers() ([]Paper, error) {
+func (s *ScholarScraper) FetchPapers() ([]domain.Paper, error) {
 	email := os.Getenv("SCHOLAR_INBOX_EMAIL")
 	password := os.Getenv("SCHOLAR_INBOX_PASSWORD")
 
@@ -36,7 +31,7 @@ func fetchPapers() ([]Paper, error) {
 	})
 
 	loginSuccess := false
-	var papers []Paper
+	var papers []domain.Paper
 
 	c.OnResponse(func(r *colly.Response) {
 		if r.Request.URL.String() == "https://api.scholar-inbox.com/api/password_login" {
@@ -96,7 +91,7 @@ func fetchPapers() ([]Paper, error) {
 					publishDate = displayVenue
 				}
 
-				paper := Paper{
+				paper := domain.Paper{
 					Title:    title,
 					Authors:  authors,
 					Date:     publishDate,
@@ -135,58 +130,4 @@ func fetchPapers() ([]Paper, error) {
 	}
 
 	return papers, nil
-}
-
-func postToSlack(papers []Paper) error {
-	api := slack.New(os.Getenv("SLACK_API_TOKEN"))
-	channelID := os.Getenv("SLACK_CHANNEL_ID")
-
-	today := time.Now().Format("2006-01-02")
-	header := fmt.Sprintf("Scholar Inbox Daily Papers (%s)", today)
-
-	var blocks []slack.Block
-	blocks = append(blocks, slack.NewHeaderBlock(slack.NewTextBlockObject("plain_text", header, false, false)))
-	blocks = append(blocks, slack.NewDividerBlock())
-
-	for i, paper := range papers {
-		titleText := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("*<%s|%s>*", paper.URL, paper.Title), false, false)
-		metaText := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Authors: %s\nDate: %s", paper.Authors, paper.Date), false, false)
-		abstractBlock := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Abstract: %s", paper.Abstract), false, false)
-
-		blocks = append(blocks, slack.NewSectionBlock(titleText, nil, nil))
-		blocks = append(blocks, slack.NewSectionBlock(metaText, nil, nil))
-		blocks = append(blocks, slack.NewSectionBlock(abstractBlock, nil, nil))
-
-		if i < len(papers)-1 {
-			blocks = append(blocks, slack.NewDividerBlock())
-		}
-	}
-
-	_, _, err := api.PostMessage(
-		channelID,
-		slack.MsgOptionBlocks(blocks...),
-	)
-	return err
-}
-
-func handleRequest(ctx context.Context) error {
-	log.Println("Starting Scholar Inbox daily job")
-
-	papers, err := fetchPapers()
-	if err != nil {
-		return fmt.Errorf("error fetching papers: %w", err)
-	}
-
-	log.Printf("Found %d papers", len(papers))
-
-	if err := postToSlack(papers); err != nil {
-		return fmt.Errorf("error posting to Slack: %w", err)
-	}
-
-	log.Println("Successfully posted papers to Slack")
-	return nil
-}
-
-func main() {
-	lambda.Start(handleRequest)
 }
