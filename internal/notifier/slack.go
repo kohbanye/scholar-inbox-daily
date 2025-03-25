@@ -40,7 +40,12 @@ func (n *SlackNotifier) PostPapers(papers []domain.Paper) error {
 	for i, paper := range papers {
 		titleText := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("*<%s|%s>*", paper.URL, paper.Title), false, false)
 		metaText := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Authors: %s\nDate: %s", paper.Authors, paper.Date), false, false)
-		abstractBlock := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Abstract: %s", paper.Abstract), false, false)
+
+		abstractText := paper.Abstract
+		if len(abstractText) > 200 {
+			abstractText = abstractText[:200] + "..."
+		}
+		abstractBlock := slack.NewTextBlockObject("mrkdwn", abstractText, false, false)
 
 		blocks = append(blocks, slack.NewSectionBlock(titleText, nil, nil))
 		blocks = append(blocks, slack.NewSectionBlock(metaText, nil, nil))
