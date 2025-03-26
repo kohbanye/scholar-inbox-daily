@@ -22,6 +22,7 @@ module "lambda" {
 
   ecr_repository_name  = var.ecr_repository_name
   lambda_function_name = var.lambda_function_name
+  image_tag            = var.image_tag
   environment_variables = {
     SCHOLAR_INBOX_EMAIL    = var.scholar_inbox_email
     SCHOLAR_INBOX_PASSWORD = var.scholar_inbox_password
@@ -29,4 +30,4 @@ module "lambda" {
     SLACK_CHANNEL_ID       = var.slack_channel_id
     TZ                     = "Asia/Tokyo"
   }
-} 
+}

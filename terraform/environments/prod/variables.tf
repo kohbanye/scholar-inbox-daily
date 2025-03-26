@@ -38,4 +38,9 @@ variable "slack_channel_id" {
   description = "Slack channel ID to post messages to"
   type        = string
   sensitive   = true
-} 
+}
+
+variable "image_tag" {
+  description = "The tag of the Docker image to use for the Lambda function"
+  type        = string
+}
