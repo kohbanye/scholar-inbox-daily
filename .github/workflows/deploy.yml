@@ -54,6 +54,7 @@ jobs:
           scholar_inbox_password = "${{ secrets.SCHOLAR_INBOX_PASSWORD }}"
           slack_api_token = "${{ secrets.SLACK_API_TOKEN }}"
           slack_channel_id = "${{ secrets.SLACK_CHANNEL_ID }}"
+          image_tag = "${{ github.sha }}"
           EOF
 
       - name: Terraform Init

@@ -38,12 +38,12 @@ resource "aws_lambda_function" "app" {
   function_name = var.lambda_function_name
   role          = aws_iam_role.lambda_exec.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.app.repository_url}:latest"
-  
+  image_uri     = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
+
   environment {
     variables = var.environment_variables
   }
-  
+
   timeout     = 30
   memory_size = 128
 }
@@ -66,4 +66,4 @@ resource "aws_lambda_permission" "allow_cloudwatch" {
   function_name = aws_lambda_function.app.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.daily_trigger.arn
-} 
+}

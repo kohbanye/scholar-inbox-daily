@@ -12,4 +12,9 @@ variable "environment_variables" {
   description = "Environment variables for the Lambda function"
   type        = map(string)
   sensitive   = true
-} 
+}
+
+variable "image_tag" {
+  description = "The tag of the Docker image to use for the Lambda function"
+  type        = string
+}
