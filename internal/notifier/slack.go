@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/kohbanye/scholar-inbox-daily/internal/domain"
+	"github.com/kohbanye/scholar-inbox-daily/internal/logger"
 	"github.com/slack-go/slack"
 )
 
 type SlackNotifier struct {
 	api       *slack.Client
 	channelID string
+	logger    *logger.Logger
 }
 
 func NewSlackNotifier() (*SlackNotifier, error) {
@@ -26,10 +28,12 @@ func NewSlackNotifier() (*SlackNotifier, error) {
 	return &SlackNotifier{
 		api:       api,
 		channelID: channelID,
+		logger:    logger.New(),
 	}, nil
 }
 
 func (n *SlackNotifier) PostPapers(papers []domain.Paper) error {
+	n.logger.Info("Starting to post papers to Slack")
 	today := time.Now().Format("2006-01-02")
 	header := fmt.Sprintf("Scholar Inbox Daily Papers (%s)", today)
 
@@ -38,6 +42,7 @@ func (n *SlackNotifier) PostPapers(papers []domain.Paper) error {
 	blocks = append(blocks, slack.NewDividerBlock())
 
 	for i, paper := range papers {
+		n.logger.Info(fmt.Sprintf("Posting paper %d: %+v", i, paper))
 		titleText := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("*<%s|%s>*", paper.URL, paper.Title), false, false)
 		metaText := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Authors: %s\nDate: %s", paper.Authors, paper.Date), false, false)
 
@@ -56,9 +61,16 @@ func (n *SlackNotifier) PostPapers(papers []domain.Paper) error {
 		}
 	}
 
+	n.logger.Info(fmt.Sprintf("Posting %d papers to Slack", len(papers)))
 	_, _, err := n.api.PostMessage(
 		n.channelID,
 		slack.MsgOptionBlocks(blocks...),
 	)
-	return err
+	if err != nil {
+		n.logger.Error("Failed to post message to Slack", err)
+		return fmt.Errorf("error posting to Slack: %w", err)
+	}
+
+	n.logger.Info("Successfully posted papers to Slack")
+	return nil
 }

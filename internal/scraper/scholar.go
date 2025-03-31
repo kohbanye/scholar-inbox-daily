@@ -3,31 +3,38 @@ package scraper
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/gocolly/colly/v2"
 	"github.com/kohbanye/scholar-inbox-daily/internal/domain"
+	"github.com/kohbanye/scholar-inbox-daily/internal/logger"
 )
 
-type ScholarScraper struct{}
+type ScholarScraper struct {
+	logger *logger.Logger
+}
 
 func NewScholarScraper() *ScholarScraper {
-	return &ScholarScraper{}
+	return &ScholarScraper{
+		logger: logger.New(),
+	}
 }
 
 func (s *ScholarScraper) FetchPapers() ([]domain.Paper, error) {
+	s.logger.Info("Starting to fetch papers from Scholar Inbox")
 	email := os.Getenv("SCHOLAR_INBOX_EMAIL")
 	password := os.Getenv("SCHOLAR_INBOX_PASSWORD")
 
 	if email == "" || password == "" {
-		return nil, fmt.Errorf("SCHOLAR_INBOX_EMAIL and SCHOLAR_INBOX_PASSWORD environment variables must be set")
+		err := fmt.Errorf("SCHOLAR_INBOX_EMAIL and SCHOLAR_INBOX_PASSWORD environment variables must be set")
+		s.logger.Error("Environment variables not set", err)
+		return nil, err
 	}
 
 	c := colly.NewCollector()
 
 	c.OnError(func(r *colly.Response, err error) {
-		log.Printf("Request URL: %s failed with response: %v\nError: %v", r.Request.URL, r, err)
+		s.logger.Error(fmt.Sprintf("Request URL: %s failed", r.Request.URL), err)
 	})
 
 	loginSuccess := false
@@ -37,30 +44,32 @@ func (s *ScholarScraper) FetchPapers() ([]domain.Paper, error) {
 		if r.Request.URL.String() == "https://api.scholar-inbox.com/api/password_login" {
 			var loginResponse map[string]interface{}
 			if err := json.Unmarshal(r.Body, &loginResponse); err != nil {
-				log.Printf("Error parsing login response: %v", err)
+				s.logger.Error("Error parsing login response", err)
 				return
 			}
 
 			if success, ok := loginResponse["success"].(bool); ok && success {
 				loginSuccess = true
-				log.Println("Login successful")
+				s.logger.Info("Login successful")
 
 				c.Visit("https://api.scholar-inbox.com/api/")
 			} else {
-				log.Printf("Login failed: %v", loginResponse)
+				s.logger.Error("Login failed", fmt.Errorf("login response: %v", loginResponse))
 			}
 		} else if r.Request.URL.String() == "https://api.scholar-inbox.com/api/" && loginSuccess {
 			var apiResponse map[string]interface{}
 			if err := json.Unmarshal(r.Body, &apiResponse); err != nil {
-				log.Printf("Error parsing API response: %v", err)
+				s.logger.Error("Error parsing API response", err)
 				return
 			}
 
 			digestPapers, ok := apiResponse["digest_df"].([]interface{})
 			if !ok {
-				log.Printf("No digest_df field found in API response")
+				s.logger.Error("No digest_df field found in API response", fmt.Errorf("api response: %v", apiResponse))
 				return
 			}
+
+			s.logger.Info(fmt.Sprintf("Found %d papers in API response", len(digestPapers)))
 
 			for _, p := range digestPapers {
 				paperMap, ok := p.(map[string]interface{})
@@ -70,6 +79,7 @@ func (s *ScholarScraper) FetchPapers() ([]domain.Paper, error) {
 
 				title, _ := paperMap["title"].(string)
 				if title == "" {
+					s.logger.Debug("Skipping paper without title")
 					continue // Skip papers without a title
 				}
 
@@ -110,6 +120,7 @@ func (s *ScholarScraper) FetchPapers() ([]domain.Paper, error) {
 	}
 	jsonData, err := json.Marshal(loginData)
 	if err != nil {
+		s.logger.Error("Error marshaling login data", err)
 		return nil, fmt.Errorf("error marshaling login data: %v", err)
 	}
 
@@ -118,16 +129,21 @@ func (s *ScholarScraper) FetchPapers() ([]domain.Paper, error) {
 		r.Headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 	})
 
+	s.logger.Info("Sending login request")
 	err = c.PostRaw("https://api.scholar-inbox.com/api/password_login", jsonData)
 	if err != nil {
+		s.logger.Error("Error sending login request", err)
 		return nil, fmt.Errorf("error sending login request: %v", err)
 	}
 
 	c.Wait()
 
 	if !loginSuccess {
-		return nil, fmt.Errorf("login failed")
+		err := fmt.Errorf("login failed")
+		s.logger.Error("Login failed", err)
+		return nil, err
 	}
 
+	s.logger.Info(fmt.Sprintf("Successfully fetched %d papers", len(papers)))
 	return papers, nil
 }
