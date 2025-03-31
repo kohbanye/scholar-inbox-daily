@@ -14,6 +14,7 @@ type LogLevel string
 const (
 	LevelDebug LogLevel = "DEBUG"
 	LevelInfo  LogLevel = "INFO"
+	LevelWarn  LogLevel = "WARN"
 	LevelError LogLevel = "ERROR"
 )
 
@@ -63,6 +64,10 @@ func (l *Logger) Debug(msg string) {
 
 func (l *Logger) Info(msg string) {
 	l.log(LevelInfo, msg, nil)
+}
+
+func (l *Logger) Warn(msg string) {
+	l.log(LevelWarn, msg, nil)
 }
 
 func (l *Logger) Error(msg string, err error) {
